@@ -46,6 +46,7 @@ namespace MD5FileSearch
             if (line != null)
             {
                 textBox1.Text = line;
+                buildPath = line;
             }
             while ((line = sr.ReadLine()) != null)
             {
@@ -102,17 +103,34 @@ namespace MD5FileSearch
             dataMap.Clear();
             System.Security.Cryptography.MD5 md5 = new System.Security.Cryptography.MD5CryptoServiceProvider();
             FileStream file;
+            int count = 0;
+            int doEventCount = 0;
+            int total = fileList.Count();
             foreach (FileInfo info in fileList)
             {
+                doEventCount++;
+                if(doEventCount > 4)
+                {
+                    Application.DoEvents();
+                    doEventCount = 0;
+                }
                 file = new FileStream(info.FullName, FileMode.Open, FileAccess.Read);
                 byte[] targetData = md5.ComputeHash(file);
-                string str = "";
+                string hashValue = "";
                 for   (int   i=0;   i<targetData.Length;   i++)     
                 {
-                    str += targetData[i].ToString("x");  
+                    hashValue += targetData[i].ToString("x");  
                 }
-                dataMap[str] = info.FullName;
+                if(dataMap.ContainsKey(hashValue))
+                {
+                    dataMap[hashValue] += ";" + info.FullName;
+                }else
+                {
+                    dataMap[hashValue] = info.FullName;
+                }
                 file.Close();
+                count++;
+                label2.Text = "重建进度:" + count + "/" + total;
             }
         }
 
@@ -159,8 +177,8 @@ namespace MD5FileSearch
 
         private void button1_Click(object sender, EventArgs e)
         {
-            List<FileInfo> fileList = GetFiles(buildPath);
-            BuildData(fileList);
+            List<FileInfo> buildFileList = GetFiles(buildPath);
+            BuildData(buildFileList);
             Write();
         }
 
