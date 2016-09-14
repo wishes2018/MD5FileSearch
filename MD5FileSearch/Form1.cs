@@ -13,17 +13,19 @@ namespace MD5FileSearch
 {
     public partial class Form1 : Form
     {
-        public string buildPath;
-        public string[] searchPaths;
-        public string dataMapPath = System.IO.Path.GetTempPath() + "MD5FileSearch.data";
-        public Dictionary<string, string> dataMap = new Dictionary<string, string>();
+        private string buildPath;
+        private string[] searchPaths;
+        private string dataMapPath = System.IO.Path.GetTempPath() + "MD5FileSearch.data";
+        private Dictionary<string, string> dataMap = new Dictionary<string, string>();
+        private Dictionary<string, bool> dropList = new Dictionary<string, bool>();
+        private bool isTreeNodeSelected = false;
         public Form1()
         {
             InitializeComponent();
             Read();
         }
 
-        public void Write()
+        private void Write()
         {
             StreamWriter sw = new StreamWriter(dataMapPath);
             sw.WriteLine(buildPath);
@@ -35,7 +37,7 @@ namespace MD5FileSearch
             sw.Close();
         }
 
-        public void Read()
+        private void Read()
         {
             if (!File.Exists(dataMapPath))
             {
@@ -45,7 +47,7 @@ namespace MD5FileSearch
             String line = sr.ReadLine();
             if (line != null)
             {
-                textBox1.Text = line;
+                comboBox1.Text = line;
                 buildPath = line;
             }
             while ((line = sr.ReadLine()) != null)
@@ -134,25 +136,6 @@ namespace MD5FileSearch
             }
         }
 
-
-        private void textBox1_DragEnter(object sender, DragEventArgs e)
-        {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
-            {
-                e.Effect = DragDropEffects.Link;
-            }
-            else
-            {
-                e.Effect = DragDropEffects.None;
-            }
-        }
-
-        private void textBox1_DragDrop(object sender, DragEventArgs e)
-        {
-            buildPath = ((System.Array)e.Data.GetData(DataFormats.FileDrop)).GetValue(0).ToString();
-            textBox1.Text = buildPath + ";";
-        }
-
         private void textBox2_DragEnter(object sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
@@ -180,6 +163,11 @@ namespace MD5FileSearch
             List<FileInfo> buildFileList = GetFiles(buildPath);
             BuildData(buildFileList);
             Write();
+            if (!dropList.ContainsKey(buildPath))
+            {
+                dropList[buildPath] = true;
+                comboBox1.Items.Insert(0, buildPath);
+            }
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -188,7 +176,8 @@ namespace MD5FileSearch
             {
                 return;
             }
-            textBox3.Text = "";
+            treeView1.Nodes.Clear();
+            TreeNode rootNode =  treeView1.Nodes.Add("Root");
             List<FileInfo> fileList = new List<FileInfo>();
             foreach (string path in searchPaths)
             {
@@ -196,11 +185,63 @@ namespace MD5FileSearch
             }
             foreach(FileInfo info in fileList)
             {
+                TreeNode secondNode =  rootNode.Nodes.Add(info.FullName);
                 string hashValue = getHash(info.FullName);
                 if (dataMap.ContainsKey(hashValue))
                 {
-                    textBox3.Text += dataMap[hashValue] + "\r\n";
+                    hashValue = dataMap[hashValue] + "\r\n";
+                    string[] split = hashValue.Split(new Char[] { ';' });
+                    foreach(string result in split)
+                    {
+                        secondNode.Nodes.Add(result);
+                    }
                 }
+            }
+            treeView1.ExpandAll();
+        }
+
+        private void comboBox1_DragDrop(object sender, DragEventArgs e)
+        {
+            buildPath = ((System.Array)e.Data.GetData(DataFormats.FileDrop)).GetValue(0).ToString();
+            comboBox1.Text = buildPath;
+        }
+
+        private void comboBox1_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effect = DragDropEffects.Link;
+            }
+            else
+            {
+                e.Effect = DragDropEffects.None;
+            }
+        }
+
+        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            buildPath = comboBox1.Text;
+        }
+
+        private void OpenFolderAndSelectFile(String fileFullName)
+        {
+            System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo("Explorer.exe");
+            psi.Arguments = "/e,/select," + fileFullName;
+            System.Diagnostics.Process.Start(psi);
+        }
+
+        private void treeView1_AfterSelect(object sender, TreeViewEventArgs e)
+        {
+            isTreeNodeSelected = true;
+            Clipboard.SetDataObject(treeView1.SelectedNode.Text);
+        }
+
+        private void treeView1_NodeMouseDoubleClick(object sender, TreeNodeMouseClickEventArgs e)
+        {
+            if (isTreeNodeSelected)
+            {
+                isTreeNodeSelected = false;
+                OpenFolderAndSelectFile(treeView1.SelectedNode.Text);
             }
         }
     }
