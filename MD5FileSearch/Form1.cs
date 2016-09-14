@@ -160,6 +160,10 @@ namespace MD5FileSearch
 
         private void button1_Click(object sender, EventArgs e)
         {
+            if(buildPath.Length == 0)
+            {
+                return;
+            }
             List<FileInfo> buildFileList = GetFiles(buildPath);
             BuildData(buildFileList);
             Write();
@@ -167,6 +171,7 @@ namespace MD5FileSearch
             {
                 dropList[buildPath] = true;
                 comboBox1.Items.Insert(0, buildPath);
+                comboBox1.SelectedIndex = 0;
             }
         }
 
@@ -242,6 +247,24 @@ namespace MD5FileSearch
             {
                 isTreeNodeSelected = false;
                 OpenFolderAndSelectFile(treeView1.SelectedNode.Text);
+            }
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            if(comboBox1.Items.Count > 0)
+            {
+                comboBox1.Items.RemoveAt(comboBox1.SelectedIndex);
+                dropList.Remove(comboBox1.Text);
+            }
+            if (comboBox1.Items.Count == 0)
+            {
+                buildPath = "";
+                comboBox1.Text = "";
+            }
+            else if(comboBox1.Items.Count > 0)
+            {
+                comboBox1.SelectedIndex = 0;
             }
         }
     }
