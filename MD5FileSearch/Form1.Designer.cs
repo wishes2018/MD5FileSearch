@@ -121,7 +121,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(671, 504);
+            this.ClientSize = new System.Drawing.Size(671, 516);
             this.Controls.Add(this.button3);
             this.Controls.Add(this.treeView1);
             this.Controls.Add(this.comboBox1);
@@ -130,6 +130,8 @@
             this.Controls.Add(this.label1);
             this.Controls.Add(this.textBox2);
             this.Controls.Add(this.button1);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
             this.Name = "Form1";
             this.Text = "MD5FileSearch By CCY";
             this.ResumeLayout(false);

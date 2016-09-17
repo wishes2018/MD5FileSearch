@@ -12,26 +12,6 @@ using System.Runtime.Serialization.Formatters.Binary;
 
 namespace MD5FileSearch
 {
-    [Serializable]
-    public class FileUnit
-    {
-        public DateTime dateTime;
-        public string hashValue;
-    }
-
-    [Serializable]
-    public class BuildUnit
-    {
-        public Dictionary<string, List<string>> md5Map = new Dictionary<string, List<string>>();
-        public Dictionary<string, FileUnit> dateMap = new Dictionary<string, FileUnit>();
-    }
-
-    [Serializable]
-    public class BuildList
-    {
-        public Dictionary<string, BuildUnit> buildList = new Dictionary<string, BuildUnit>();
-    }
-
         public partial class Form1 : Form
     {
         private string buildPath = "";
@@ -65,6 +45,11 @@ namespace MD5FileSearch
             }
 
             FileStream fileStream = new FileStream(dataMapPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if(fileStream.Length <= 0)
+            {
+                fileStream.Close();
+                return;
+            }
             BinaryFormatter b = new BinaryFormatter();
             buildListObj = b.Deserialize(fileStream) as BuildList;
             fileStream.Close();
@@ -321,8 +306,8 @@ namespace MD5FileSearch
             }
             if(comboBox1.Items.Count > 0)
             {
-                comboBox1.Items.RemoveAt(comboBox1.SelectedIndex);
                 buildListObj.buildList.Remove(comboBox1.Text);
+                comboBox1.Items.RemoveAt(comboBox1.SelectedIndex);
                 Write();
             }
             if (comboBox1.Items.Count == 0)
@@ -337,4 +322,25 @@ namespace MD5FileSearch
             }
         }
     }
+
+    [Serializable]
+    public class FileUnit
+    {
+        public DateTime dateTime;
+        public string hashValue;
+    }
+
+    [Serializable]
+    public class BuildUnit
+    {
+        public Dictionary<string, List<string>> md5Map = new Dictionary<string, List<string>>();
+        public Dictionary<string, FileUnit> dateMap = new Dictionary<string, FileUnit>();
+    }
+
+    [Serializable]
+    public class BuildList
+    {
+        public Dictionary<string, BuildUnit> buildList = new Dictionary<string, BuildUnit>();
+    }
+
 }
