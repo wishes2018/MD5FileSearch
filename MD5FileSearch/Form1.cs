@@ -5,20 +5,37 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 using System.Windows.Forms;
 using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace MD5FileSearch
 {
-    public partial class Form1 : Form
+    [Serializable]
+    public class BuildUnit
     {
-        private string buildPath;
+        public Dictionary<string, string> md5Map = new Dictionary<string, string>();
+        public Dictionary<string, DateTime> dateMap = new Dictionary<string, DateTime>();
+    }
+
+    [Serializable]
+    public class BuildList
+    {
+        public Dictionary<string, BuildUnit> buildList = new Dictionary<string, BuildUnit>();
+    }
+
+        public partial class Form1 : Form
+    {
+        private string buildPath = "";
         private string[] searchPaths;
         private string dataMapPath = System.IO.Path.GetTempPath() + "MD5FileSearch.data";
-        private Dictionary<string, string> dataMap = new Dictionary<string, string>();
-        private Dictionary<string, bool> dropList = new Dictionary<string, bool>();
+        public BuildList buildListObj = new BuildList();
         private bool isTreeNodeSelected = false;
+        private bool isBuildFinish = true;
+        private delegate void setLabelText(string value);
+        private delegate void addCombox();
+
         public Form1()
         {
             InitializeComponent();
@@ -27,14 +44,10 @@ namespace MD5FileSearch
 
         private void Write()
         {
-            StreamWriter sw = new StreamWriter(dataMapPath);
-            sw.WriteLine(buildPath);
-            foreach (var item in dataMap)
-            {
-                sw.WriteLine(item.Key + " " + item.Value);
-            }
-            sw.Flush();
-            sw.Close();
+            FileStream fileStream = new FileStream(dataMapPath, FileMode.Create);
+            BinaryFormatter b = new BinaryFormatter();
+            b.Serialize(fileStream, buildListObj);
+            fileStream.Close();
         }
 
         private void Read()
@@ -43,19 +56,18 @@ namespace MD5FileSearch
             {
                 return;
             }
-            StreamReader sr = new StreamReader(dataMapPath);
-            String line = sr.ReadLine();
-            if (line != null)
+
+            FileStream fileStream = new FileStream(dataMapPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            BinaryFormatter b = new BinaryFormatter();
+            buildListObj = b.Deserialize(fileStream) as BuildList;
+            fileStream.Close();
+
+            foreach(var item in buildListObj.buildList)
             {
-                comboBox1.Text = line;
-                buildPath = line;
+                comboBox1.Items.Insert(0, item.Key);
+                comboBox1.SelectedIndex = 0;
+                buildPath = item.Key;
             }
-            while ((line = sr.ReadLine()) != null)
-            {
-                string[] split = line.Split(new Char[] {' '});
-                dataMap[split[0]] = split[1];
-            }
-            sr.Close();
         }
 
         private List<FileInfo> GetDirectorys(DirectoryInfo dir)//搜索文件夹中的文件
@@ -100,39 +112,62 @@ namespace MD5FileSearch
             return str;
         }
 
+        private void setLabel2Text(string value)
+        {
+            label2.Text = value;
+        }
+
+        private void addCombox1()
+        {
+            comboBox1.Items.Insert(0, buildPath);
+            comboBox1.SelectedIndex = 0;
+        }
+
         private void BuildData(List<FileInfo> fileList)
         {
-            dataMap.Clear();
             System.Security.Cryptography.MD5 md5 = new System.Security.Cryptography.MD5CryptoServiceProvider();
             FileStream file;
             int count = 0;
-            int doEventCount = 0;
             int total = fileList.Count();
+            bool needRebuild = true;
             foreach (FileInfo info in fileList)
             {
-                doEventCount++;
-                if(doEventCount > 4)
+                needRebuild = true;
+                if (buildListObj.buildList[buildPath].dateMap.ContainsKey(info.FullName))
                 {
-                    Application.DoEvents();
-                    doEventCount = 0;
-                }
-                file = new FileStream(info.FullName, FileMode.Open, FileAccess.Read);
-                byte[] targetData = md5.ComputeHash(file);
-                string hashValue = "";
-                for   (int   i=0;   i<targetData.Length;   i++)     
-                {
-                    hashValue += targetData[i].ToString("x");  
-                }
-                if(dataMap.ContainsKey(hashValue))
-                {
-                    dataMap[hashValue] += ";" + info.FullName;
+                    if(buildListObj.buildList[buildPath].dateMap[info.FullName] == info.LastWriteTime)
+                    {
+                        needRebuild = false;
+                    }
+                    
                 }else
                 {
-                    dataMap[hashValue] = info.FullName;
+                    buildListObj.buildList[buildPath].dateMap[info.FullName] = info.LastWriteTime;
                 }
-                file.Close();
+
+                if(needRebuild)
+                {
+                    file = new FileStream(info.FullName, FileMode.Open, FileAccess.Read);
+                    byte[] targetData = md5.ComputeHash(file);
+                    string hashValue = "";
+                    for (int i = 0; i < targetData.Length; i++)
+                    {
+                        hashValue += targetData[i].ToString("x");
+                    }
+                    if (buildListObj.buildList[buildPath].md5Map.ContainsKey(hashValue))
+                    {
+                        buildListObj.buildList[buildPath].md5Map[hashValue] += ";" + info.FullName;
+                    }
+                    else
+                    {
+                        buildListObj.buildList[buildPath].md5Map[hashValue] = info.FullName;
+                    }
+                    file.Close();
+                }
+
                 count++;
-                label2.Text = "重建进度:" + count + "/" + total;
+                string value = "重建进度:" + count + "/" + total;
+                this.Invoke(new setLabelText(setLabel2Text), value);
             }
         }
 
@@ -158,21 +193,29 @@ namespace MD5FileSearch
             }
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        private void threadRun()
         {
-            if(buildPath.Length == 0)
+            if (!buildListObj.buildList.ContainsKey(buildPath))
             {
-                return;
+                buildListObj.buildList[buildPath] = new BuildUnit();
+                this.Invoke(new addCombox(addCombox1));
             }
             List<FileInfo> buildFileList = GetFiles(buildPath);
             BuildData(buildFileList);
             Write();
-            if (!dropList.ContainsKey(buildPath))
+            isBuildFinish = true;
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            if(buildPath.Length == 0 || !isBuildFinish)
             {
-                dropList[buildPath] = true;
-                comboBox1.Items.Insert(0, buildPath);
-                comboBox1.SelectedIndex = 0;
+                return;
             }
+            isBuildFinish = false;
+            Thread t1 = new Thread(new ThreadStart(threadRun));
+            t1.IsBackground = true;
+            t1.Start();
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -192,9 +235,9 @@ namespace MD5FileSearch
             {
                 TreeNode secondNode =  rootNode.Nodes.Add(info.FullName);
                 string hashValue = getHash(info.FullName);
-                if (dataMap.ContainsKey(hashValue))
+                if (buildListObj.buildList[buildPath].md5Map.ContainsKey(hashValue))
                 {
-                    hashValue = dataMap[hashValue] + "\r\n";
+                    hashValue = buildListObj.buildList[buildPath].md5Map[hashValue] + "\r\n";
                     string[] split = hashValue.Split(new Char[] { ';' });
                     foreach(string result in split)
                     {
@@ -252,15 +295,21 @@ namespace MD5FileSearch
 
         private void button3_Click(object sender, EventArgs e)
         {
+            if(comboBox1.SelectedIndex < 0 )
+            {
+                return;
+            }
             if(comboBox1.Items.Count > 0)
             {
                 comboBox1.Items.RemoveAt(comboBox1.SelectedIndex);
-                dropList.Remove(comboBox1.Text);
+                buildListObj.buildList.Remove(comboBox1.Text);
+                Write();
             }
             if (comboBox1.Items.Count == 0)
             {
                 buildPath = "";
                 comboBox1.Text = "";
+                label2.Text = "重建进度:";
             }
             else if(comboBox1.Items.Count > 0)
             {
