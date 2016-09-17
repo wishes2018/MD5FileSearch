@@ -13,10 +13,17 @@ using System.Runtime.Serialization.Formatters.Binary;
 namespace MD5FileSearch
 {
     [Serializable]
+    public class FileUnit
+    {
+        public DateTime dateTime;
+        public string hashValue;
+    }
+
+    [Serializable]
     public class BuildUnit
     {
-        public Dictionary<string, string> md5Map = new Dictionary<string, string>();
-        public Dictionary<string, DateTime> dateMap = new Dictionary<string, DateTime>();
+        public Dictionary<string, List<string>> md5Map = new Dictionary<string, List<string>>();
+        public Dictionary<string, FileUnit> dateMap = new Dictionary<string, FileUnit>();
     }
 
     [Serializable]
@@ -130,19 +137,26 @@ namespace MD5FileSearch
             int count = 0;
             int total = fileList.Count();
             bool needRebuild = true;
+            Dictionary<string, FileUnit> dateMap = buildListObj.buildList[buildPath].dateMap;
+            Dictionary<string, List<string>> md5Map = buildListObj.buildList[buildPath].md5Map;
+            Dictionary<string, FileUnit> deleteMap = new Dictionary<string, FileUnit>(dateMap);
+
+
             foreach (FileInfo info in fileList)
             {
                 needRebuild = true;
-                if (buildListObj.buildList[buildPath].dateMap.ContainsKey(info.FullName))
+                if (dateMap.ContainsKey(info.FullName))
                 {
-                    if(buildListObj.buildList[buildPath].dateMap[info.FullName] == info.LastWriteTime)
+                    if(dateMap[info.FullName].dateTime == info.LastWriteTime)
                     {
                         needRebuild = false;
                     }
-                    
-                }else
+                    deleteMap.Remove(info.FullName);
+                }
+                else
                 {
-                    buildListObj.buildList[buildPath].dateMap[info.FullName] = info.LastWriteTime;
+                    dateMap[info.FullName] = new FileUnit();
+                    dateMap[info.FullName].dateTime = info.LastWriteTime;
                 }
 
                 if(needRebuild)
@@ -154,20 +168,26 @@ namespace MD5FileSearch
                     {
                         hashValue += targetData[i].ToString("x");
                     }
-                    if (buildListObj.buildList[buildPath].md5Map.ContainsKey(hashValue))
+
+                    if(!md5Map.ContainsKey(hashValue))
                     {
-                        buildListObj.buildList[buildPath].md5Map[hashValue] += ";" + info.FullName;
+                        md5Map[hashValue] = new List<string>();
                     }
-                    else
-                    {
-                        buildListObj.buildList[buildPath].md5Map[hashValue] = info.FullName;
-                    }
+
+                    md5Map[hashValue].Add(info.FullName);
+                    dateMap[info.FullName].hashValue = hashValue;
                     file.Close();
                 }
 
                 count++;
                 string value = "重建进度:" + count + "/" + total;
                 this.Invoke(new setLabelText(setLabel2Text), value);
+            }
+
+            foreach(var item in deleteMap)
+            {
+                dateMap.Remove(item.Key);
+                md5Map.Remove(item.Value.hashValue);
             }
         }
 
@@ -220,32 +240,32 @@ namespace MD5FileSearch
 
         private void button2_Click(object sender, EventArgs e)
         {
-            if(searchPaths == null)
+            if(searchPaths == null || buildPath == "")
             {
                 return;
             }
             treeView1.Nodes.Clear();
-            TreeNode rootNode =  treeView1.Nodes.Add("Root");
+            TreeNode rootNode =  treeView1.Nodes.Add(buildPath);
             List<FileInfo> fileList = new List<FileInfo>();
             foreach (string path in searchPaths)
             {
                 fileList.AddRange(GetFiles(path));
             }
-            foreach(FileInfo info in fileList)
+             
+            foreach (FileInfo info in fileList)
             {
                 TreeNode secondNode =  rootNode.Nodes.Add(info.FullName);
                 string hashValue = getHash(info.FullName);
                 if (buildListObj.buildList[buildPath].md5Map.ContainsKey(hashValue))
                 {
-                    hashValue = buildListObj.buildList[buildPath].md5Map[hashValue] + "\r\n";
-                    string[] split = hashValue.Split(new Char[] { ';' });
-                    foreach(string result in split)
+                    foreach(string result in buildListObj.buildList[buildPath].md5Map[hashValue])
                     {
                         secondNode.Nodes.Add(result);
                     }
                 }
             }
             treeView1.ExpandAll();
+            isTreeNodeSelected = false;
         }
 
         private void comboBox1_DragDrop(object sender, DragEventArgs e)
@@ -286,7 +306,7 @@ namespace MD5FileSearch
 
         private void treeView1_NodeMouseDoubleClick(object sender, TreeNodeMouseClickEventArgs e)
         {
-            if (isTreeNodeSelected)
+            if (isTreeNodeSelected && treeView1.SelectedNode != null)
             {
                 isTreeNodeSelected = false;
                 OpenFolderAndSelectFile(treeView1.SelectedNode.Text);
